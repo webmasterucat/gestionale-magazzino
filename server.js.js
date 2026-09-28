@@ -1,12 +1,13 @@
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
+const cors = require('cors'); // Permette al frontend di comunicare col server
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware per leggere i dati in formato JSON
 app.use(express.json());
+app.use(cors()); // Abilita CORS
 
-// Connessione al database SQLite (crea il file database.sqlite in automatico)
+// Connessione al database SQLite
 const db = new sqlite3.Database('./database.sqlite', (err) => {
     if (err) {
         console.error('Errore di connessione al database', err.message);
@@ -16,16 +17,14 @@ const db = new sqlite3.Database('./database.sqlite', (err) => {
     }
 });
 
-// Creazione delle tabelle iniziali
+// Creazione delle tabelle iniziali e inserimento dati di prova se vuote
 function creaTabelle() {
     db.serialize(() => {
-        // Tabella Magazzini
         db.run(`CREATE TABLE IF NOT EXISTS magazzini (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nome TEXT NOT NULL
         )`);
 
-        // Tabella Giacenze (Prodotti per magazzino)
         db.run(`CREATE TABLE IF NOT EXISTS giacenze (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             magazzino_id INTEGER,
@@ -35,7 +34,6 @@ function creaTabelle() {
             FOREIGN KEY(magazzino_id) REFERENCES magazzini(id)
         )`);
 
-        // Tabella Ordini
         db.run(`CREATE TABLE IF NOT EXISTS ordini (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             magazzino_id INTEGER,
@@ -45,19 +43,29 @@ function creaTabelle() {
             riferimento_fattura TEXT,
             riferimento_deal TEXT,
             data_ordine TEXT,
-            prodotti TEXT NOT NULL, -- JSON o stringa con i prodotti ordinati
+            prodotti TEXT NOT NULL,
             stato TEXT DEFAULT 'Preso in carico',
-            metodo_spedizione TEXT,
-            confezionamento TEXT,
-            tracking TEXT,
+            metodo_spedizione TEXT DEFAULT '',
+            confezionamento TEXT DEFAULT '',
+            tracking TEXT DEFAULT '',
             FOREIGN KEY(magazzino_id) REFERENCES magazzini(id)
-        )`);
+        )`, () => {
+            // Inseriamo un magazzino e una giacenza di prova se la tabella è vuota
+            db.get("SELECT COUNT(*) as count FROM magazzini", (err, row) => {
+                if (row.count === 0) {
+                    db.run("INSERT INTO magazzini (nome) VALUES ('Magazzino Centrale Roma')");
+                    db.run("INSERT INTO magazzini (nome) VALUES ('Magazzino Nord Milano')");
+                    db.run("INSERT INTO giacenze (magazzino_id, prodotto, modello, quantita) VALUES (1, 'Smartphone Fold7', '12GB/512GB', 15)");
+                    db.run("INSERT INTO giacenze (magazzino_id, prodotto, modello, quantita) VALUES (2, 'Tablet Pro', '10 inch', 8)");
+                }
+            });
+        });
     });
 }
 
 // --- ROTTE API ---
 
-// 1. Visualizza tutte le giacenze (Dashboard magazzino)
+// 1. Visualizza tutte le giacenze
 app.get('/api/giacenze', (req, res) => {
     const query = `
         SELECT giacenze.*, magazzini.nome as magazzino_nome 
@@ -70,35 +78,46 @@ app.get('/api/giacenze', (req, res) => {
     });
 });
 
-// 2. Crea un nuovo ordine (Utente/Venditore)
+// 2. Visualizza tutti gli ordini (con stato e tracking)
+app.get('/api/ordini', (req, res) => {
+    const query = `
+        SELECT ordini.*, magazzini.nome as magazzino_nome 
+        FROM ordini 
+        JOIN magazzini ON ordini.magazzino_id = magazzini.id
+        ORDER BY ordini.id DESC
+    `;
+    db.all(query, [], (err, rows) => {
+        if (err) return res.status(500).json({ errore: err.message });
+        res.json(rows);
+    });
+});
+
+// 3. Crea un nuovo ordine
 app.post('/api/ordini', (req, res) => {
     const { magazzino_id, fornitore, venditore, acquirente, riferimento_fattura, riferimento_deal, data_ordine, prodotti } = req.body;
     
     const query = `INSERT INTO ordini (magazzino_id, fornitore, venditore, acquirente, riferimento_fattura, riferimento_deal, data_ordine, prodotti, stato) 
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Preso in carico')`;
     
-    db.run(query, [magazzino_id, fornitore, venditore, acquirente, riferimento_fattura, riferimento_deal, data_ordine, JSON.stringify(prodotti)], function(err) {
+    db.run(query, [magazzino_id, fornitore, venditore, acquirente, riferimento_fattura, riferimento_deal, data_ordine, prodotti], function(err) {
         if (err) return res.status(500).json({ errore: err.message });
         res.json({ id_ordine: this.lastID, messaggio: 'Ordine creato con successo! Notifica visiva attivata.' });
     });
 });
 
-// 3. Aggiorna lo stato dell'ordine e gestisce le giacenze (Amministratore)
+// 4. Aggiorna lo stato e i dati di spedizione dell'ordine
 app.put('/api/ordini/:id/stato', (req, res) => {
     const { stato, metodo_spedizione, confezionamento, tracking } = req.body;
     const ordineId = req.params.id;
 
     const query = `UPDATE ordini SET stato = ?, metodo_spedizione = ?, confezionamento = ?, tracking = ? WHERE id = ?`;
     
-    db.run(query, [stato, metodo_spedizione, confezionamento, tracking, ordineId], function(err) {
+    db.run(query, [stato, metodo_spedizione || '', confezionamento || '', tracking || '', ordineId], function(err) {
         if (err) return res.status(500).json({ errore: err.message });
-        
-        // Se lo stato diventa "Evaso", qui andrà inserita la logica per scalare le giacenze in automatico
-        res.json({ messaggio: `Ordine aggiornato allo stato: ${stato}` });
+        res.json({ messaggio: `Stato dell'ordine aggiornato a: ${stato}` });
     });
 });
 
-// Avvio del server
 app.listen(PORT, () => {
     console.log(`Server avviato sulla porta ${PORT}`);
 });
