@@ -1,0 +1,13 @@
+{
+  "name": "gestionale-magazzino",
+  "version": "1.0.0",
+  "description": "Software gestionale multi-magazzino e ordini",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "sqlite3": "^5.1.7"
+  }
+}
