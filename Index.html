@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gestionale Multi-Magazzino</title>
+    <title>Gestionale Multi-Magazzino & Ordini</title>
     <style>
         body { font-family: Arial, sans-serif; background-color: #f4f6f9; margin: 0; padding: 20px; color: #333; }
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         h1, h2 { color: #0066cc; }
         .section { margin-bottom: 30px; padding-bottom: 20px; border-bottom: 1px solid #eee; }
         form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
@@ -16,10 +16,15 @@
         input, select { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
         button { background-color: #0066cc; color: white; padding: 12px; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; grid-column: span 2; }
         button:hover { background-color: #004999; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
         th { background-color: #f8f9fa; }
-        /* Stile Notifica Visiva */
+        .badge { padding: 5px 8px; border-radius: 4px; font-weight: bold; font-size: 11px; color: white; }
+        .badge-preso { background-color: #ffc107; color: #333; }
+        .badge-lavorazione { background-color: #17a2b8; }
+        .badge-pronto { background-color: #6f42c1; }
+        .badge-evaso { background-color: #28a745; }
+        /* Notifica Visiva */
         #notifica { display: none; position: fixed; top: 20px; right: 20px; background-color: #28a745; color: white; padding: 15px 20px; border-radius: 5px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 1000; font-weight: bold; }
     </style>
 </head>
@@ -29,14 +34,14 @@
     <div id="notifica">Operazione completata con successo!</div>
 
     <div class="container">
-        <h1>📦 Gestionale Multi-Magazzino</h1>
+        <h1>📦 Gestionale Multi-Magazzino e Ordini</h1>
 
         <!-- Sezione Inserimento Ordine -->
         <div class="section">
-            <h2>Nuovo Ordine</h2>
+            <h2>Inserisci Nuovo Ordine</h2>
             <form id="ordineForm">
                 <div class="form-group">
-                    <label>ID Magazzino:</label>
+                    <label>ID Magazzino (1 o 2):</label>
                     <input type="number" id="magazzino_id" value="1" required>
                 </div>
                 <div class="form-group">
@@ -44,7 +49,7 @@
                     <input type="text" id="fornitore" placeholder="Nome fornitore" required>
                 </div>
                 <div class="form-group">
-                    <label>Venditore (Chi fa l'ordine):</label>
+                    <label>Venditore (Chi fa l'ordine - es. PIPPO):</label>
                     <input type="text" id="venditore" value="PIPPO" required>
                 </div>
                 <div class="form-group">
@@ -64,16 +69,38 @@
                     <input type="date" id="data_ordine" required>
                 </div>
                 <div class="form-group">
-                    <label>Prodotti (Nome e Modello):</label>
-                    <input type="text" id="prodotti" placeholder="Es. Smartphone X, Modello Pro" required>
+                    <label>Prodotti e Modelli:</label>
+                    <input type="text" id="prodotti" placeholder="Es. Smartphone Fold7 (12GB)" required>
                 </div>
                 <button type="submit">Invia Ordine</button>
             </form>
         </div>
 
+        <!-- Sezione Monitoraggio Ordini -->
+        <div class="section">
+            <h2>Monitoraggio Ordini & Stati</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Magazzino / Fornitore</th>
+                        <th>Venditore / Acquirente</th>
+                        <th>Riferimenti</th>
+                        <th>Prodotti</th>
+                        <th>Stato Attuale</th>
+                        <th>Spedizione & Tracking</th>
+                        <th>Azioni Amministratore</th>
+                    </tr>
+                </thead>
+                <tbody id="tabellaOrdini">
+                    <tr><td colspan="8" style="text-align: center;">Caricamento ordini...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
         <!-- Sezione Dashboard Giacenze -->
         <div class="section">
-            <h2>Dashboard Giacenze Magazzino</h2>
+            <h2>Dashboard Giacenze di Magazzino</h2>
             <table>
                 <thead>
                     <tr>
@@ -82,60 +109,84 @@
                         <th>Modello</th>
                         <th>Quantità Disponibile</th>
                     </tr>
-                pel</tr>
+                </thead>
                 <tbody id="tabellaGiacenze">
-                    <tr><td colspan="4" style="text-align: center;">Caricamento giacenze in corso...</td></tr>
+                    <tr><td colspan="4" style="text-align: center;">Caricamento giacenze...</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
     <script>
-        // ⚠️ IMPORTANTE: Sostituisci questo indirizzo con il link esatto che ti ha dato Render del tuo backend!
+        // ⚠️ INSERISCI QUI IL TUO LINK RENDER (es. https://gestionale-magazzino.onrender.com)
         const API_URL = "https://TUO-SERVIZIO.onrender.com";
 
-        // Funzione per mostrare la notifica visiva a schermo
         function mostraNotifica(testo) {
             const notifica = document.getElementById('notifica');
             notifica.innerText = testo;
             notifica.style.display = 'block';
-            setTimeout(() => {
-                notifica.style.display = 'none';
-            }, 4000); // Scompare dopo 4 secondi
+            setTimeout(() => { notifica.style.display = 'none'; }, 4000);
         }
 
-        // Caricamento Giacenze all'avvio
-        async function caricaGiacenze() {
+        async function caricaDati() {
             try {
-                const risposta = await fetch(`${API_URL}/api/giacenze`);
-                const dati = await risposta.json();
-                const tbody = document.getElementById('tabellaGiacenze');
-                tbody.innerHTML = '';
+                // Carica Giacenze
+                const resG = await fetch(`${API_URL}/api/giacenze`);
+                const giacenze = await resG.json();
+                const tbodyG = document.getElementById('tabellaGiacenze');
+                tbodyG.innerHTML = giacenze.length ? '' : '<tr><td colspan="4" style="text-align: center;">Nessuna giacenza.</td></tr>';
+                giacenze.forEach(g => {
+                    tbodyG.innerHTML += `<tr><td>${g.magazzino_nome}</td><td>${g.prodotto}</td><td>${g.modello}</td><td><b>${g.quantita}</b></td></tr>`;
+                });
 
-                if (dati.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nessuna giacenza registrata.</td></tr>';
-                    return;
-                }
+                // Carica Ordini
+                const resO = await fetch(`${API_URL}/api/ordini`);
+                const ordini = await resO.json();
+                const tbodyO = document.getElementById('tabellaOrdini');
+                tbodyO.innerHTML = ordini.length ? '' : '<tr><td colspan="8" style="text-align: center;">Nessun ordine presente.</td></tr>';
 
-                dati.forEach(g => {
-                    tbody.innerHTML += `
+                ordini.forEach(o => {
+                    let badgeClass = 'badge-preso';
+                    if (o.stato === 'In lavorazione') badgeClass = 'badge-lavorazione';
+                    if (o.stato === 'Pronto') badgeClass = 'badge-pronto';
+                    if (o.stato === 'Evaso') badgeClass = 'badge-evaso';
+
+                    tbodyO.innerHTML += `
                         <tr>
-                            <td>${g.magazzino_nome || 'Magazzino ' + g.magazzino_id}</td>
-                            <td>${g.prodotto}</td>
-                            <td>${g.modello}</td>
-                            <td><b>${g.quantita}</b></td>
+                            <td>#${o.id}</td>
+                            <td><b>${o.magazzino_nome}</b><br><small>Forn: ${o.fornitore}</small></td>
+                            <td>Vend: <b>${o.venditore}</b><br>Acq: ${o.acquirente}</td>
+                            <td>Fatt: ${o.riferimento_fattura || '-'}<br>Deal: ${o.riferimento_deal || '-'}<br>Data: ${o.data_ordine}</td>
+                            <td>${o.prodotti}</td>
+                            <td><span class="badge ${badgeClass}">${o.stato}</span></td>
+                            <td>
+                                <small>Metodo: ${o.metodo_spedizione || 'N/D'}</small><br>
+                                <small>Conf: ${o.confezionamento || 'N/D'}</small><br>
+                                <small>Tracking: <b>${o.tracking || 'N/D'}</b></small>
+                            </td>
+                            <td>
+                                <select id="stato_${o.id}">
+                                    <option value="Preso in carico" ${o.stato==='Preso in carico'?'selected':''}>Preso in carico</option>
+                                    <option value="In lavorazione" ${o.stato==='In lavorazione'?'selected':''}>In lavorazione</option>
+                                    <option value="Pronto" ${o.stato==='Pronto'?'selected':''}>Pronto</option>
+                                    <option value="Evaso" ${o.stato==='Evaso'?'selected':''}>Evaso</option>
+                                </select><br><br>
+                                <input type="text" id="metodo_${o.id}" placeholder="Metodo spedizione" value="${o.metodo_spedizione || ''}" style="width:110px; margin-bottom:4px;"><br>
+                                <input type="text" id="conf_${o.id}" placeholder="Confezionamento" value="${o.confezionamento || ''}" style="width:110px; margin-bottom:4px;"><br>
+                                <input type="text" id="track_${o.id}" placeholder="Corriere / Tracking" value="${o.tracking || ''}" style="width:110px; margin-bottom:6px;"><br>
+                                <button onclick="aggiornaOrdine(${o.id})" style="padding: 6px; font-size: 12px; grid-column: auto;">Aggiorna</button>
+                            </td>
                         </tr>
                     `;
                 });
             } catch (e) {
-                console.error("Errore caricamento giacenze:", e);
+                console.error("Errore caricamento dati:", e);
             }
         }
 
-        // Invio del modulo ordine
+        // Invio nuovo ordine
         document.getElementById('ordineForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-
             const nuovoOrdine = {
                 magazzino_id: document.getElementById('magazzino_id').value,
                 fornitore: document.getElementById('fornitore').value,
@@ -147,27 +198,44 @@
                 prodotti: document.getElementById('prodotti').value
             };
 
-            try {
-                const risposta = await fetch(`${API_URL}/api/ordini`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(nuovoOrdine)
-                });
-                const risultato = await risposta.json();
-                
-                if (risposta.ok) {
-                    mostraNotifica("Ordine inviato con successo! Preso in carico.");
-                    document.getElementById('ordineForm').reset();
-                } else {
-                    alert("Errore: " + risultato.errore);
-                }
-            } catch (err) {
-                alert("Errore di connessione al server.");
+            const res = await fetch(`${API_URL}/api/ordini`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(nuovoOrdine)
+            });
+
+            if (res.ok) {
+                mostraNotifica("Ordine inviato con successo!");
+                document.getElementById('ordineForm').reset();
+                caricaDati();
+            } else {
+                alert("Errore nell'invio dell'ordine.");
             }
         });
 
-        // Carica le giacenze appena si apre la pagina
-        caricaGiacenze();
+        // Aggiorna stato e spedizione ordine (Amministratore)
+        async function aggiornaOrdine(id) {
+            const stato = document.getElementById(`stato_${id}`).value;
+            const metodo_spedizione = document.getElementById(`metodo_${id}`).value;
+            const confezionamento = document.getElementById(`conf_${id}`).value;
+            const tracking = document.getElementById(`track_${id}`).value;
+
+            const res = await fetch(`${API_URL}/api/ordini/${id}/stato`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ stato, metodo_spedizione, confezionamento, tracking })
+            });
+
+            if (res.ok) {
+                mostraNotifica("Stato ordine e tracking aggiornati!");
+                caricaDati();
+            } else {
+                alert("Errore durante l'aggiornamento.");
+            }
+        }
+
+        // Caricamento iniziale
+        caricaDati();
     </script>
 </body>
 </html>
